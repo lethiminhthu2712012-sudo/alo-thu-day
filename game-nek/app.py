@@ -359,4 +359,31 @@ def show_playing_screen():
     )
 
     if st.sidebar.button("🎮 Chọn Trò Chơi Khác"):
-        play_sound(click_
+        play_sound(click_b64, volume=0.5)
+        st.session_state.page = "select_game"
+        st.rerun()
+
+    if st.sidebar.button("🏠 Về Trang Chủ"):
+        play_sound(click_b64, volume=0.5)
+        st.session_state.page = "home"
+        st.rerun()
+
+    st.sidebar.write("---")
+    st.sidebar.subheader("Chọn Màn (Level 1 - 5):")
+    st.session_state.level = st.sidebar.slider("Màn", 1, 5, st.session_state.level)
+
+    if st.session_state.current_game == "tile":
+        play_tile_game(st.session_state.level)
+    elif st.session_state.current_game == "sudoku":
+        play_sudoku_game(st.session_state.level)
+    elif st.session_state.current_game == "block":
+        play_block_blast(st.session_state.level)
+
+
+# --- ĐIỀU HƯỚNG TRANG CHÍNH ---
+if st.session_state.page == "home":
+    show_home()
+elif st.session_state.page == "select_game":
+    show_select_game()
+elif st.session_state.page == "playing":
+    show_playing_screen()
