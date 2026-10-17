@@ -1,4 +1,5 @@
 import base64
+import os
 import random
 import numpy as np
 import streamlit as st
@@ -8,27 +9,30 @@ st.set_page_config(
     page_title="Game của Thucute 🌸",
     page_icon="🌸",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 
 
-# 2. Hàm hỗ trợ đọc và chuyển đổi tệp sang Base64
-def get_base64_of_bin_file(bin_file):
-    try:
-        with open(bin_file, "rb") as f:
-            data = f.read()
-        return base64.b64encode(data).decode()
-    except Exception:
-        return ""
+# 2. Hàm đọc tệp sang Base64 an toàn
+def get_file_b64(file_path):
+    if os.path.exists(file_path):
+        with open(file_path, "rb") as f:
+            return base64.b64encode(f.read()).decode()
+    return ""
 
 
-# Đọc ảnh nền toàn trang (Ảnh 6)
-bg_img_b64 = get_base64_of_bin_file("assets/background.png")
+# Đọc dữ liệu ảnh và âm thanh
+banner_b64 = get_file_b64("assets/home_banner.png")  # Ảnh 3
+bg_b64 = get_file_b64("assets/background.png")  # Ảnh 4
+
+bgm_b64 = get_file_b64("sounds_bgm.mp3")
+click_b64 = get_file_b64("sounds_click.mp3")
+win_b64 = get_file_b64("sounds_win.mp3")
+lose_b64 = get_file_b64("sounds_lose.mp3")
 
 
-# 3. Hàm phát hiệu ứng âm thanh
-def play_sound(sound_file, loop=False, volume=0.5):
-    sound_b64 = get_base64_of_bin_file(sound_file)
+# 3. Hàm nhúng trình phát âm thanh HTML5 / JS
+def play_sound(sound_b64, loop=False, volume=0.6):
     if sound_b64:
         loop_attr = "loop" if loop else ""
         audio_html = f"""
@@ -36,67 +40,16 @@ def play_sound(sound_file, loop=False, volume=0.5):
                 <source src="data:audio/mp3;base64,{sound_b64}" type="audio/mp3">
             </audio>
             <script>
-                var audioElements = document.getElementsByTagName('audio');
-                if (audioElements.length > 0) {{
-                    audioElements[audioElements.length - 1].volume = {volume};
-                }}
+                var audios = document.getElementsByTagName('audio');
+                if (audios.length > 0) {{ audios[audios.length - 1].volume = {volume}; }}
             </script>
         """
         st.components.v1.html(audio_html, height=0)
 
 
-# 4. CSS Tùy chỉnh giao diện hoa đào
-custom_css = f"""
-<style>
-/* Dùng Ảnh 6 làm hình nền toàn bộ trang web */
-.stApp {{
-    background: url("data:image/png;base64,{bg_img_b64}") no-repeat center center fixed !important;
-    background-size: cover !important;
-}}
-
-/* Tùy chỉnh Sidebar trong suốt */
-[data-testid="stSidebar"] {{
-    background-color: rgba(255, 255, 255, 0.75) !important;
-    backdrop-filter: blur(6px);
-    border-right: 2px solid #f2a6b4;
-}}
-
-/* Tùy chỉnh phong cách nút bấm chung */
-.stButton > button {{
-    background: linear-gradient(135deg, #f7a8b8, #e88299);
-    color: white !important;
-    font-size: 18px !important;
-    font-weight: bold !important;
-    border-radius: 20px !important;
-    border: 2px solid #ffffff !important;
-    padding: 8px 24px !important;
-    box-shadow: 0px 4px 10px rgba(232, 130, 153, 0.4);
-    transition: all 0.3s ease;
-}}
-
-.stButton > button:hover {{
-    transform: scale(1.05);
-    background: linear-gradient(135deg, #e88299, #d46b82);
-    box-shadow: 0px 6px 15px rgba(232, 130, 153, 0.6);
-}}
-
-/* Khung trò chơi */
-.game-container {{
-    background-color: rgba(255, 255, 255, 0.65);
-    border-radius: 20px;
-    padding: 25px;
-    border: 2px solid rgba(247, 178, 189, 0.8);
-    box-shadow: 0 8px 20px rgba(0,0,0,0.05);
-    backdrop-filter: blur(4px);
-    text-align: center;
-}}
-</style>
-"""
-st.markdown(custom_css, unsafe_allow_html=True)
-
-# 5. Khởi tạo Trạng thái Ứng dụng
+# 4. Khởi tạo Trạng thái (Session State)
 if "page" not in st.session_state:
-    st.session_state.page = "home"
+    st.session_state.page = "home"  # Các trang: 'home', 'select_game', 'playing'
 if "current_game" not in st.session_state:
     st.session_state.current_game = "tile"
 if "level" not in st.session_state:
@@ -104,206 +57,180 @@ if "level" not in st.session_state:
 if "bgm_enable" not in st.session_state:
     st.session_state.bgm_enable = True
 
-# Bật nhạc nền BGM
-if st.session_state.bgm_enable:
-    play_sound("sounds_bgm.mp3", loop=True, volume=0.2)
+# Phát BGM nếu đang bật
+if st.session_state.bgm_enable and bgm_b64:
+    play_sound(bgm_b64, loop=True, volume=0.3)
 
 
-# --- TRANG CHỦ (HOME PAGE - TÍCH HỢP CLICK TRỰC TIẾP VÀO BANNER) ---
+# 5. Cấu hình CSS Nền & Chữ To Rõ
+if st.session_state.page in ["home", "select_game"]:
+    # Nền cho Trang chủ và Trang chọn game: Dùng Ảnh 3 (home_banner.png)
+    current_bg = banner_b64
+else:
+    # Nền cho Giao diện trong Game: Dùng Ảnh 4 (background.png)
+    current_bg = bg_b64
+
+custom_css = f"""
+<style>
+/* Đặt Nền Toàn Màn Hình */
+.stApp {{
+    background: url("data:image/png;base64,{current_bg}") no-repeat center center fixed !important;
+    background-size: cover !important;
+}}
+
+/* Sidebar trong suốt */
+[data-testid="stSidebar"] {{
+    background-color: rgba(255, 255, 255, 0.85) !important;
+    backdrop-filter: blur(8px);
+    border-right: 3px solid #f2a6b4;
+}}
+
+/* Chữ to rõ ràng hơn toàn hệ thống */
+html, body, [class*="css"], .stMarkdown, p, div, span {{
+    font-size: 22px !important;
+    font-weight: 600 !important;
+    color: #4a2c32 !important;
+}}
+
+h1, h2, h3 {{
+    font-size: 34px !important;
+    font-weight: 800 !important;
+    color: #c94c68 !important;
+    text-shadow: 1px 1px 2px rgba(255,255,255,0.8);
+}}
+
+/* Nút bấm giao diện */
+.stButton > button {{
+    background: linear-gradient(135deg, #f7a8b8, #e88299) !important;
+    color: white !important;
+    font-size: 24px !important;
+    font-weight: bold !important;
+    border-radius: 25px !important;
+    border: 3px solid #ffffff !important;
+    padding: 12px 30px !important;
+    box-shadow: 0px 6px 15px rgba(232, 130, 153, 0.5) !important;
+    transition: all 0.3s ease !important;
+    width: 100%;
+}}
+
+.stButton > button:hover {{
+    transform: scale(1.05) !important;
+    background: linear-gradient(135deg, #e88299, #d46b82) !important;
+}}
+
+/* Khung trò chơi trong suốt */
+.game-card {{
+    background-color: rgba(255, 255, 255, 0.8) !important;
+    border-radius: 25px !important;
+    padding: 30px !important;
+    border: 3px solid #f7b2bd !important;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.1) !important;
+    backdrop-filter: blur(6px) !important;
+    text-align: center !important;
+    margin-bottom: 20px !important;
+}}
+</style>
+"""
+st.markdown(custom_css, unsafe_allow_html=True)
+
+
+# --- 1. TRANG CHỦ (MENU CHÍNH - BẤM TRỰC TIẾP VÀO PLAY NOW NẰM TRÊN BANNER) ---
 def show_home():
     st.markdown("<br><br>", unsafe_allow_html=True)
-    col1, col2, col3 = st.columns([1, 2.5, 1])
+    c1, c2, c3 = st.columns([1, 3, 1])
 
-    with col2:
-        # Chuyển đổi ảnh Banner (Ảnh 1) thành dạng base64 để nhúng vào thẻ HTML có gắn sự kiện click
-        banner_b64 = get_base64_of_bin_file("assets/home_banner.png")
-
-        # Tạo một khung HTML chứa ảnh banner và hiệu ứng khi di chuột vào (tạo cảm giác nút bấm)
-        click_banner_html = f"""
-        <div style="text-align: center; cursor: pointer;" onclick="document.getElementById('hidden_play_btn').click();">
-            <img src="data:image/png;base64,{banner_b64}" style="width: 100%; border-radius: 20px; box-shadow: 0 10px 25px rgba(232, 130, 153, 0.4); transition: transform 0.2s ease;" onmouseover="this.style.transform='scale(1.02)';" onmouseout="this.style.transform='scale(1.0)';">
+    with c2:
+        # Nhúng Ảnh 3 làm Banner kèm Bản đồ tọa độ Image Map nhấp vào chữ Play Now
+        banner_html = f"""
+        <div style="text-align: center; position: relative;">
+            <img src="data:image/png;base64,{banner_b64}" usemap="#playmap" style="width: 100%; border-radius: 20px; box-shadow: 0 10px 25px rgba(212,107,130,0.3);">
+            <map name="playmap">
+                <!-- Vùng phủ chữ PLAY NOW ở chính giữa ảnh -->
+                <area shape="rect" coords="150,150,850,500" alt="Play Now" href="javascript:void(0);" onclick="document.getElementById('start_game_trigger').click();">
+            </map>
         </div>
         """
-        st.markdown(click_banner_html, unsafe_allow_html=True)
+        st.markdown(banner_html, unsafe_allow_html=True)
 
         st.markdown("<br>", unsafe_allow_html=True)
 
-        # Nút bấm phụ ẩn/hiện ngay dưới banner để đồng bộ sự kiện chuyển trang khi click vào ảnh
-        # (Streamlit xử lý sự kiện Python thông qua nút này khi HTML kích hoạt)
-        if st.button(
-            "🌸 BẮT ĐẦU CHƠI NGAY (PLAY NOW) 🌸", key="hidden_play_btn"
-        ):
-            play_sound("sounds_click.mp3", volume=0.6)
-            st.session_state.page = "game"
+        # Nút bấm chuyển trang (được kích hoạt khi nhấp vào chữ play now trên ảnh)
+        if st.button("🌸 CHỌN GAME ĐỂ CHƠI 🌸", key="start_game_trigger"):
+            play_sound(click_b64, volume=0.7)
+            st.session_state.page = "select_game"
             st.rerun()
 
 
-# --- CÁC TRÒ CHƠI ---
-
-
-# Game 1: Tile Match
-def play_tile_game(level):
+# --- 2. TRANG LỰA CHỌN GAME RIÊNG (GAME SELECTION PAGE) ---
+def show_select_game():
     st.markdown(
-        f"<div class='game-container'><h3>🌸 Tile Match - Màn {level}</h3><p>Ghép 3 hình giống nhau để xóa khỏi khay!</p></div>",
+        """
+        <div class='game-card'>
+            <h1>🌸 DANH SÁCH TRÒ CHƠI 🌸</h1>
+            <p style='font-size: 24px !important;'>Hãy chọn một trò chơi bạn yêu thích bên dưới để bắt đầu!</p>
+        </div>
+        """,
         unsafe_allow_html=True,
     )
 
-    icons = ["🌸", "🌺", "🌹", "🌻", "🌼", "🌷", "🍁"][: level + 2]
-    st.write("---")
+    st.markdown("<br>", unsafe_allow_html=True)
 
-    col1, col2 = st.columns([2, 1])
+    col1, col2, col3 = st.columns(3)
+
+    # Thẻ Game 1: Tile Match
     with col1:
-        st.write("### Các ô hoa trên bàn chơi:")
-        grid = [random.choice(icons) for _ in range(level * 4)]
-        st.write(" ".join([f"[{icon}]" for icon in grid]))
+        st.markdown(
+            """
+            <div class='game-card'>
+                <h2>🧩 Tile Match</h2>
+                <p>Ghép 3 hình hoa quả giống nhau để xóa khỏi khay!</p>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        if st.button("Chơi Tile Match 🌸", key="btn_tile"):
+            play_sound(click_b64, volume=0.7)
+            st.session_state.current_game = "tile"
+            st.session_state.page = "playing"
+            st.rerun()
 
+    # Thẻ Game 2: Sudoku
     with col2:
-        if st.button("Hoàn thành màn 🎉"):
-            play_sound("sounds_win.mp3", volume=0.8)
-            if level < 5:
-                st.success(f"Chúc mừng bạn vượt qua màn {level}!")
-                st.session_state.level = level + 1
-            else:
-                st.balloons()
-                st.success("Bạn đã chiến thắng toàn bộ 5 màn Tile Match! 🎉")
+        st.markdown(
+            """
+            <div class='game-card'>
+                <h2>🔢 Sudoku</h2>
+                <p>Thử thách trí tuệ điền số vào lưới 4x4 đầy thú vị!</p>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        if st.button("Chơi Sudoku 🌸", key="btn_sudoku"):
+            play_sound(click_b64, volume=0.7)
+            st.session_state.current_game = "sudoku"
+            st.session_state.page = "playing"
+            st.rerun()
 
-        if st.button("Thử lại / Thua ❌"):
-            play_sound("sounds_lose.mp3", volume=0.7)
-            st.error("Rất tiếc! Hãy thử lại màn này nhé!")
+    # Thẻ Game 3: Block Blast
+    with col3:
+        st.markdown(
+            """
+            <div class='game-card'>
+                <h2>💥 Block Blast</h2>
+                <p>Xếp các khối hoa vào hàng hoặc cột để ghi điểm cao!</p>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        if st.button("Chơi Block Blast 🌸", key="btn_block"):
+            play_sound(click_b64, volume=0.7)
+            st.session_state.current_game = "block"
+            st.session_state.page = "playing"
+            st.rerun()
 
-
-# Game 2: Sudoku
-def play_sudoku_game(level):
-    st.markdown(
-        f"<div class='game-container'><h3>🌸 Floral Sudoku - Màn {level}</h3><p>Điền số từ 1 đến 4 vào lưới!</p></div>",
-        unsafe_allow_html=True,
-    )
-
-    boards = {
-        1: [[1, 2, 3, 0], [3, 4, 0, 2], [0, 1, 4, 3], [4, 0, 2, 1]],
-        2: [[1, 0, 0, 4], [0, 4, 1, 0], [0, 3, 2, 0], [2, 0, 0, 1]],
-        3: [[0, 2, 0, 0], [0, 0, 4, 0], [0, 1, 0, 0], [0, 0, 3, 0]],
-        4: [[0, 0, 3, 0], [1, 0, 0, 0], [0, 0, 0, 2], [0, 4, 0, 0]],
-        5: [[0, 0, 0, 0], [0, 2, 0, 1], [3, 0, 4, 0], [0, 0, 0, 0]],
-    }
-    board = boards.get(level, boards[1])
-    st.write("---")
-
-    cols = st.columns(4)
-    for r in range(4):
-        for c in range(4):
-            val = board[r][c]
-            with cols[c]:
-                if val != 0:
-                    st.button(f"🌸 {val}", key=f"s_{r}_{c}", disabled=True)
-                else:
-                    st.number_input(
-                        "",
-                        min_value=1,
-                        max_value=4,
-                        key=f"in_{r}_{c}",
-                        label_visibility="collapsed",
-                    )
-
-    st.write("<br>", unsafe_allow_html=True)
-    c1, c2 = st.columns(2)
-    with c1:
-        if st.button("Kiểm tra đáp án ✨"):
-            play_sound("sounds_win.mp3", volume=0.8)
-            if level < 5:
-                st.success(f"Chính xác! Đã mở màn {level+1}!")
-                st.session_state.level = level + 1
-            else:
-                st.balloons()
-                st.success("Chúc mừng bạn đã hoàn thành 5 màn Sudoku! 🎉")
+    st.markdown("<br><br>", unsafe_allow_html=True)
+    c1, c2, c3 = st.columns([1, 1, 1])
     with c2:
-        if st.button("Sai rồi / Thua ❌"):
-            play_sound("sounds_lose.mp3", volume=0.7)
-            st.error("Đáp án chưa đúng rồi, bạn chọn lại nhé!")
-
-
-# Game 3: Block Blast
-def play_block_blast(level):
-    st.markdown(
-        f"<div class='game-container'><h3>🌸 Block Blast - Màn {level}</h3><p>Xếp khối hoa vào hàng hoặc cột để ghi điểm!</p></div>",
-        unsafe_allow_html=True,
-    )
-
-    st.write("---")
-    for r in range(5):
-        cols = st.columns(5)
-        for c in range(5):
-            cols[c].markdown("🌸" if (r + c) % 2 == 0 else "⬜")
-
-    st.write("<br>", unsafe_allow_html=True)
-    c1, c2 = st.columns(2)
-    with c1:
-        if st.button("Xóa hàng ghi điểm 💥"):
-            play_sound("sounds_win.mp3", volume=0.8)
-            if level < 5:
-                st.success(f"Xuất sắc! Vượt qua Màn {level}!")
-                st.session_state.level = level + 1
-            else:
-                st.balloons()
-                st.success("Chúc mừng bạn phá đảo toàn bộ Block Blast! 🎉")
-    with c2:
-        if st.button("Hết ô trống / Thua ❌"):
-            play_sound("sounds_lose.mp3", volume=0.7)
-            st.error("Không còn vị trí đặt khối! Game Over!")
-
-
-# --- TRANG CHƠI GAME & THANH ĐIỀU HƯỚNG ---
-def show_game_screen():
-    st.sidebar.title("🌸 MENU TRÒ CHƠI")
-
-    st.session_state.bgm_enable = st.sidebar.checkbox(
-        "🔊 Bật nhạc nền BGM", value=st.session_state.bgm_enable
-    )
-
-    if st.sidebar.button("🏠 Về Trang Chủ"):
-        play_sound("sounds_click.mp3", volume=0.5)
-        st.session_state.page = "home"
-        st.rerun()
-
-    st.sidebar.write("---")
-    st.sidebar.subheader("Chọn trò chơi:")
-
-    game_choice = st.sidebar.radio(
-        "Danh sách Game:",
-        [
-            "1. Tile Match (Ảnh 2)",
-            "2. Sudoku (Ảnh 3)",
-            "3. Block Blast (Ảnh 4)",
-        ],
-    )
-
-    if "Tile Match" in game_choice and st.session_state.current_game != "tile":
-        play_sound("sounds_click.mp3", volume=0.5)
-        st.session_state.current_game = "tile"
-    elif "Sudoku" in game_choice and st.session_state.current_game != "sudoku":
-        play_sound("sounds_click.mp3", volume=0.5)
-        st.session_state.current_game = "sudoku"
-    elif (
-        "Block Blast" in game_choice
-        and st.session_state.current_game != "block"
-    ):
-        play_sound("sounds_click.mp3", volume=0.5)
-        st.session_state.current_game = "block"
-
-    st.sidebar.write("---")
-    st.sidebar.subheader("Chọn Màn (Level 1 - 5):")
-    st.session_state.level = st.sidebar.slider("Màn", 1, 5, st.session_state.level)
-
-    if st.session_state.current_game == "tile":
-        play_tile_game(st.session_state.level)
-    elif st.session_state.current_game == "sudoku":
-        play_sudoku_game(st.session_state.level)
-    elif st.session_state.current_game == "block":
-        play_block_blast(st.session_state.level)
-
-
-# --- ĐIỀU HƯỚNG TRANG ---
-if st.session_state.page == "home":
-    show_home()
-else:
-    show_game_screen()
+        if st.button("🏠 Quay Về Màn Hình Chính", key="back_home_btn"):
+            play_sound(click_b64, volume=0.6)
+            st.
